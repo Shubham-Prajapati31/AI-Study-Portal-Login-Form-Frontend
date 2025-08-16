@@ -1,23 +1,27 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from 'react';
-import { Mail, Lock, User, Eye, EyeOff } from 'lucide-react';
+import React, { useState, useRef, useEffect } from "react";
+import { Mail, Lock, User, Eye, EyeOff } from "lucide-react";
+import toast from "react-hot-toast";
+import { useRouter } from "next/navigation";
 
 export default function AuthSystem() {
-  const [currentView, setCurrentView] = useState('login'); // 'login', 'signup', 'emailOTP', 'resetOTP'
+  const [currentView, setCurrentView] = useState("login"); // 'login', 'signup', 'emailOTP', 'resetOTP'
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
-    fullName: '',
-    email: '',
-    password: ''
+    fullName: "",
+    email: "",
+    password: "",
   });
-  const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const otpRefs = useRef([]);
+
+  const router = useRouter();
 
   const handleInputChange = (e) => {
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value
+      [e.target.name]: e.target.value,
     });
   };
 
@@ -26,7 +30,7 @@ export default function AuthSystem() {
       const newOtp = [...otp];
       newOtp[index] = value;
       setOtp(newOtp);
-      
+
       // Auto-focus next input
       if (value && index < 5) {
         otpRefs.current[index + 1].focus();
@@ -35,32 +39,109 @@ export default function AuthSystem() {
   };
 
   const handleOtpKeyDown = (index, e) => {
-    if (e.key === 'Backspace' && !otp[index] && index > 0) {
+    if (e.key === "Backspace" && !otp[index] && index > 0) {
       otpRefs.current[index - 1].focus();
     }
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (currentView === 'login') {
-      console.log('Login:', formData);
-      // Simulate login process
-    } else if (currentView === 'signup') {
-      console.log('Signup:', formData);
-      // Simulate signup and redirect to email verification
-      setCurrentView('emailOTP');
-    } else if (currentView === 'emailOTP') {
-      console.log('Email OTP:', otp.join(''));
-      // Handle email verification
-    } else if (currentView === 'resetOTP') {
-      console.log('Reset OTP:', otp.join(''));
+    if (currentView === "login") {
+      console.log("Login:", formData);
+
+      fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: formData.email,
+          password: formData.password,
+        }),
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          console.log("Login response:", data);
+          if (data.token) {
+            toast.success("Login successful ✅");
+
+            // Save token in localStorage (or cookie if you want more security)
+            localStorage.setItem("authToken", data.token);
+
+            router.push('/Landing')
+            // Redirect user to dashboard or change view
+            // Example:
+            // navigate("/dashboard");  <-- if using react-router
+            // or
+            // setCurrentView("dashboard");
+          } else {
+            toast.error(data.message || "Login failed ❌");
+          }
+        })
+        .catch((err) => {
+          console.error("Login error:", err);
+        });
+    } else if (currentView === "signup") {
+      console.log("Signup:", formData);
+
+      fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/register`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: formData.fullName,
+          email: formData.email,
+          password: formData.password,
+        }),
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.message === "OTP sent to email") {
+            toast.success("OTP has been sent to your email");
+            setCurrentView("emailOTP"); // switch to OTP input UI
+          } else {
+            toast.error(data.message || "Signup failed");
+          }
+        })
+        .catch((err) => {
+          console.error("Signup error:", err);
+        });
+    } else if (currentView === "emailOTP") {
+      const otpCode = otp.join("");
+      console.log("Email OTP:", otpCode);
+
+      fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/verify-otp`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: formData.email, // pass email used in signup
+          otp: otpCode,
+        }),
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.message === "User verified successfully") {
+            toast.success("Email verified ✅, you can now log in");
+            setCurrentView("login"); // redirect to login view
+          } else {
+            toast.error(data.message || "OTP verification failed");
+          }
+        })
+        .catch((err) => {
+          console.error("OTP verification error:", err);
+        });
+    } else if (currentView === "resetOTP") {
+      console.log("Reset OTP:", otp.join(""));
       // Handle password reset verification
     }
   };
 
   const handleForgotPassword = () => {
-    setCurrentView('resetOTP');
-    setOtp(['', '', '', '', '', '']);
+    setCurrentView("resetOTP");
+    setOtp(["", "", "", "", "", ""]);
   };
 
   const renderLoginForm = () => (
@@ -87,7 +168,7 @@ export default function AuthSystem() {
           <div className="relative">
             <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400 w-5 h-5" />
             <input
-              type={showPassword ? 'text' : 'password'}
+              type={showPassword ? "text" : "password"}
               name="password"
               value={formData.password}
               onChange={handleInputChange}
@@ -99,7 +180,11 @@ export default function AuthSystem() {
               onClick={() => setShowPassword(!showPassword)}
               className="absolute right-4 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
             >
-              {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              {showPassword ? (
+                <EyeOff className="w-5 h-5" />
+              ) : (
+                <Eye className="w-5 h-5" />
+              )}
             </button>
           </div>
 
@@ -122,9 +207,9 @@ export default function AuthSystem() {
 
           <div className="text-center">
             <p className="text-slate-400">
-              Don't have an account?{' '}
+              Don't have an account?{" "}
               <button
-                onClick={() => setCurrentView('signup')}
+                onClick={() => setCurrentView("signup")}
                 className="text-blue-400 hover:text-blue-300 transition-colors underline"
               >
                 Sign up
@@ -172,7 +257,7 @@ export default function AuthSystem() {
           <div className="relative">
             <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400 w-5 h-5" />
             <input
-              type={showPassword ? 'text' : 'password'}
+              type={showPassword ? "text" : "password"}
               name="password"
               value={formData.password}
               onChange={handleInputChange}
@@ -184,7 +269,11 @@ export default function AuthSystem() {
               onClick={() => setShowPassword(!showPassword)}
               className="absolute right-4 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
             >
-              {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              {showPassword ? (
+                <EyeOff className="w-5 h-5" />
+              ) : (
+                <Eye className="w-5 h-5" />
+              )}
             </button>
           </div>
 
@@ -202,14 +291,14 @@ export default function AuthSystem() {
             onClick={handleSubmit}
             className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-4 rounded-2xl font-semibold hover:from-blue-700 hover:to-purple-700 transition-all duration-300 transform hover:scale-105"
           >
-            Sign Up
+            Verify
           </button>
 
           <div className="text-center">
             <p className="text-slate-400">
-              Already have an account?{' '}
+              Already have an account?{" "}
               <button
-                onClick={() => setCurrentView('login')}
+                onClick={() => setCurrentView("login")}
                 className="text-blue-400 hover:text-blue-300 transition-colors underline"
               >
                 Login here
@@ -234,7 +323,7 @@ export default function AuthSystem() {
             {otp.map((digit, index) => (
               <input
                 key={index}
-                ref={(el) => otpRefs.current[index] = el}
+                ref={(el) => (otpRefs.current[index] = el)}
                 type="text"
                 maxLength="1"
                 value={digit}
@@ -254,7 +343,7 @@ export default function AuthSystem() {
 
           <div className="text-center">
             <button
-              onClick={() => setCurrentView('login')}
+              onClick={() => setCurrentView("login")}
               className="text-slate-400 hover:text-white transition-colors"
             >
               ← Back to Login
@@ -267,21 +356,21 @@ export default function AuthSystem() {
 
   const renderCurrentView = () => {
     switch (currentView) {
-      case 'login':
+      case "login":
         return renderLoginForm();
-      case 'signup':
+      case "signup":
         return renderSignupForm();
-      case 'emailOTP':
+      case "emailOTP":
         return renderOTPForm(
-          'Email Verify OTP',
-          'Enter the 6-digit code sent to your email id.',
-          'Verify email'
+          "Email Verify OTP",
+          "Enter the 6-digit code sent to your email id.",
+          "Verify email"
         );
-      case 'resetOTP':
+      case "resetOTP":
         return renderOTPForm(
-          'Reset password OTP',
-          'Enter the 6-digit code sent to your email id.',
-          'Submit'
+          "Reset password OTP",
+          "Enter the 6-digit code sent to your email id.",
+          "Submit"
         );
       default:
         return renderLoginForm();
@@ -290,19 +379,19 @@ export default function AuthSystem() {
 
   // Auto-focus first OTP input when switching to OTP views
   useEffect(() => {
-    if ((currentView === 'emailOTP' || currentView === 'resetOTP') && otpRefs.current[0]) {
+    if (
+      (currentView === "emailOTP" || currentView === "resetOTP") &&
+      otpRefs.current[0]
+    ) {
       setTimeout(() => otpRefs.current[0].focus(), 100);
     }
   }, [currentView]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-400 via-purple-500 to-purple-600 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        {renderCurrentView()}
-      </div>
+      <div className="w-full max-w-md">{renderCurrentView()}</div>
     </div>
   );
 }
 
 // Demo
-// Demo Test
